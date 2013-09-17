@@ -153,7 +153,7 @@ works only if the chars are coded in ASCII]"
 (defun write-variable-length-quantity (quantity &optional (termination 0))
   (when (> quantity 127)
     (write-variable-length-quantity (ash quantity -7) #x80))
-  (write-bytes (logior (logand quantity #x7f) termination)))
+  (write-bytes (logior (logand (round quantity) #x7f) termination)))
 
 (defun length-of-variables-length-quantity (quantity)
   (1+ (if (< quantity 128)
