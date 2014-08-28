@@ -38,6 +38,7 @@
            #:active-sensing-message
            #:smpte-offset-message
            #:sequence/track-name-message
+           #:tune-request-message
            #:system-exclusive-message #:authorization-system-exclusive-message
            #:sequence-number-message
            #:general-text-message #:copyright-message #:sequence/track-name-message
@@ -50,7 +51,8 @@
            #:message-channel #:message-key #:message-time
            #:message-velocity #:message-numerator #:message-denominator
            #:message-sf #:message-mi #:message-tempo #:message-program
-           #:message-value #:message-port
+           #:message-value #:message-port #:message-text #:message-sequence
+           #:message-data
            #:header #:header-type
            #:unknown-event #:status #:data-byte
            #:status-min))
@@ -745,8 +747,8 @@ works only if the chars are coded in ASCII]"
 (define-midi-message active-sensing-message (real-time-message)
   :status-min #xfe :status-max #xfe)
 
-;; (define-midi-message tune-request-message (real-time-message)
-;;  :status-min #xf6 :status-max #xf6)
+(define-midi-message tune-request-message (real-time-message)
+ :status-min #xf6 :status-max #xf6)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
@@ -790,7 +792,7 @@ works only if the chars are coded in ASCII]"
 
 (define-midi-message sequence-number-message (meta-message tempo-map-message)
   :data-min #x00 :data-max #x00
-  :slots ((sequence))
+  :slots ((sequence :initarg :sequence :reader message-sequence))
   :filler (let ((data2 next-byte))
             (setf sequence (if (zerop data2)
                                0
@@ -800,7 +802,7 @@ works only if the chars are coded in ASCII]"
             (write-bytes (ash sequence -8) (logand sequence #xf))))
 
 (define-midi-message text-message (meta-message)
-  :slots ((text))
+  :slots ((text :initarg :text :reader message-text))
   :filler (setf text (loop with len = next-byte
                         with str = (make-string len)
                         for i from 0 below len
@@ -870,7 +872,11 @@ works only if the chars are coded in ASCII]"
 
 (define-midi-message smpte-offset-message (meta-message tempo-map-message)
   :data-min #x54 :data-max #x54
-  :slots ((hr) (mn) (se) (fr) (ff))
+  :slots ((hr :initarg :hr :reader message-hr)
+          (mn :initarg :mn :reader message-mn)
+          (se :initarg :se :reader message-se)
+          (fr :initarg :fr :reader message-fr)
+          (ff :initarg :ff :reader message-ff))
   :filler (progn next-byte (setf hr next-byte mn next-byte se next-byte
                                  fr next-byte ff next-byte))
   :length 5
@@ -888,8 +894,8 @@ works only if the chars are coded in ASCII]"
 
 (define-midi-message key-signature-message (meta-message)
   :data-min #x59 :data-max #x59
-  :slots ((sf :reader message-sf)
-          (mi :reader message-mi))
+  :slots ((sf :initarg :sf :reader message-sf)
+          (mi :initarg :mi :reader message-mi))
   :filler (progn next-byte (setf sf (let ((temp-sf next-byte))
                                       (if (> temp-sf 127) 
                                           (- temp-sf 256)
@@ -900,7 +906,7 @@ works only if the chars are coded in ASCII]"
 
 (define-midi-message proprietary-event (meta-message)
   :data-min #x7f :data-max #x7f
-  :slots ((data))
+  :slots ((data :initarg :data :reader message-data))
   :filler (setf data (loop with len = (read-variable-length-quantity)
                         with vec = (make-array 
                                     len 
