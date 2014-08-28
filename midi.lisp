@@ -30,16 +30,30 @@
            #:midifile
            #:midifile-format #:midifile-tracks #:midifile-division
            #:message #:note-off-message #:note-on-message #:tempo-message
-           #:program-change-message #:pitch-bend-message
+           #:program-change-message #:channel-pressure-message #:pitch-bend-message
            #:key-signature-message #:time-signature-message
+           #:control-change-message #:program-change-message
+           #:timing-clock-message #:start-sequence-message
+           #:continue-sequence-message #:stop-sequence-message
+           #:active-sensing-message
            #:smpte-offset-message
            #:sequence/track-name-message
+           #:system-exclusive-message #:authorization-system-exclusive-message
+           #:sequence-number-message
+           #:general-text-message #:copyright-message #:sequence/track-name-message
+           #:instrument-message
+           #:lyric-message #:marker-message
+           #:cue-point-message #:program-name-message #:device-name-message #:channel-prefix-message
+           #:end-of-track-message #:tempo-message #:smpte-offset-message
+           #:time-signature-message #:key-signature-message
+           #:proprietary-event
            #:message-channel #:message-key #:message-time
            #:message-velocity #:message-numerator #:message-denominator
            #:message-sf #:message-mi #:message-tempo #:message-program
-           #:message-value
+           #:message-value #:message-port
            #:header #:header-type
-           #:unknown-event #:status #:data-byte))
+           #:unknown-event #:status #:data-byte
+           #:status-min))
 
 (in-package :midi)
 
@@ -202,6 +216,8 @@ works only if the chars are coded in ASCII]"
 
 (define-condition header ()
   ((header-type :initarg :header :reader header-type))
+  (:report (lambda (condition stream)
+             (format stream "Invalid header type ~S" (header-type condition))))
   (:documentation "condition when the header is not correct"))
 
 (defun read-next-byte ()
@@ -279,7 +295,7 @@ works only if the chars are coded in ASCII]"
                           format division track))
 
 (defparameter *status* nil "the status while reading an event")
-(defparameter *running-status* nil "the running status while reading an event")
+(defparameter *running-status* 144 "the running status while reading an event")
 (defparameter *dispatch-table* (make-array 256 :initial-element nil)
   "given values of status (and perhaps data1), find a class to create")
 
@@ -534,6 +550,9 @@ works only if the chars are coded in ASCII]"
                      message
                    ,writer)))))
 
+(defun status-min (class-name)
+  (gethash class-name *status-min*))
+ 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
 ;;; midi messages
@@ -546,7 +565,7 @@ works only if the chars are coded in ASCII]"
   :writer (write-bytes status))
 
 (define-midi-message channel-message (message)
-  :slots ((channel :reader message-channel))
+  :slots ((channel :initarg :channel :reader message-channel))
   :filler (setf channel (logand *status* #x0f)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -575,8 +594,8 @@ works only if the chars are coded in ASCII]"
 
 (define-midi-message polyphonic-key-pressure-message (voice-message)
   :status-min #xa0 :status-max #xaf
-  :slots ((key)
-          (pressure))
+  :slots ((key :initarg :key :reader message-key)
+          (pressure :initarg :pressure :reader message-pressure))
   :filler (setf key next-byte
                 pressure next-byte)
   :length 2
@@ -585,8 +604,8 @@ works only if the chars are coded in ASCII]"
 (define-midi-message control-change-message (voice-message)
   :status-min #xb0 :status-max #xbf
   :data-min #x00 :data-max #x78
-  :slots ((controller :initarg :controller)
-          (value :initarg value))
+  :slots ((controller :initarg :controller :reader message-controller)
+          (value :initarg value :reader message-value))
   :filler (setf controller next-byte
                 value next-byte)
   :length 2
@@ -601,7 +620,7 @@ works only if the chars are coded in ASCII]"
 
 (define-midi-message channel-pressure-message (voice-message)
   :status-min #xd0 :status-max #xdf
-  :slots ((pressure))
+  :slots ((pressure :initarg :pressure :reader message-pressure))
   :filler (setf pressure next-byte)
   :length 1
   :writer (write-bytes pressure))
@@ -793,6 +812,7 @@ works only if the chars are coded in ASCII]"
                  (loop for char across text do
                       (write-bytes (char-code char)))))
 
+
 (define-midi-message general-text-message (text-message)
   :data-min #x01 :data-max #x01)
 
@@ -822,14 +842,14 @@ works only if the chars are coded in ASCII]"
 
 (define-midi-message channel-prefix-message (meta-message)
   :data-min #x20 :data-max #x20
-  :slots ((channel))
+  :slots ((channel :initarg :channel :reader message-channel))
   :length 1
   :filler (progn next-byte (setf channel next-byte))
   :writer (write-bytes 1 channel))
 
 (define-midi-message midi-port-message (meta-message)
   :data-min #x21 :data-max #x21
-  :slots ((port))
+  :slots ((port :initarg :port :reader message-port))
   :length 1
   :filler (progn next-byte (setf port next-byte))
   :writer (write-bytes 1 port))
@@ -890,3 +910,6 @@ works only if the chars are coded in ASCII]"
                         finally (return vec)))
   :writer (map nil (lambda (byte) (write-bytes byte))
                data)) ; FIXME
+
+;;;; THE END ;;;;
+
