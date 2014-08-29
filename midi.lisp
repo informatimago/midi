@@ -52,9 +52,41 @@
            #:message-velocity #:message-numerator #:message-denominator
            #:message-sf #:message-mi #:message-tempo #:message-program
            #:message-value #:message-port #:message-text #:message-sequence
-           #:message-data
+           #:message-data #:message-pressure #:message-controller
            #:header #:header-type
            #:unknown-event #:status #:data-byte
+   "RESET-ALL-CONTROLLERS-MESSAGE"
+   "LOCAL-CONTROL-MESSAGE"
+   "ALL-NOTES-OFF-MESSAGE"
+   "OMNI-MODE-OFF-MESSAGE"
+   "OMNI-MODE-ON-MESSAGE"
+   "MONO-MODE-ON-MESSAGE"
+   "POLY-MODE-ON-MESSAGE"
+   "SYSTEM-MESSAGE"
+   "TEMPO-MAP-MESSAGE"
+   "COMMON-MESSAGE"
+   "TIMING-CODE-MESSAGE"
+   "SONG-POSITION-POINTER-MESSAGE"
+   "SONG-SELECT-MESSAGE"
+   "TUNE-REQUEST-MESSAGE"
+   "REAL-TIME-MESSAGE"
+   "TIMING-CLOCK-MESSAGE"
+   "START-SEQUENCE-MESSAGE"
+   "CONTINUE-SEQUENCE-MESSAGE"
+   "STOP-SEQUENCE-MESSAGE"
+   "ACTIVE-SENSING-MESSAGE"
+   "TUNE-REQUEST-MESSAGE"
+   "MESSAGE"
+   "CHANNEL-MESSAGE"
+   "VOICE-MESSAGE"
+   "NOTE-OFF-MESSAGE"
+   "NOTE-ON-MESSAGE"
+   "POLYPHONIC-KEY-PRESSURE-MESSAGE"
+   "CONTROL-CHANGE-MESSAGE"
+   "PROGRAM-CHANGE-MESSAGE"
+   "CHANNEL-PRESSURE-MESSAGE"
+   "PITCH-BEND-MESSAGE"
+   "MODE-MESSAGE"
            #:status-min))
 
 (in-package :midi)
