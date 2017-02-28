@@ -16,13 +16,13 @@
 ;;; Lesser General Public License for more details.
 ;;;
 ;;; You should have received a copy of the GNU Lesser General Public
-;;; License along with this library; if not, write to the 
-;;; Free Software Foundation, Inc., 59 Temple Place - Suite 330, 
+;;; License along with this library; if not, write to the
+;;; Free Software Foundation, Inc., 59 Temple Place - Suite 330,
 ;;; Boston, MA  02111-1307  USA.
 ;;;
 ;;; This file contains library for MIDI and Midifiles. Messages are
 ;;; represented as CLOS class instances in a class hierarchy that
-;;; reflects interesting aspects of the messages themselves. 
+;;; reflects interesting aspects of the messages themselves.
 
 (defpackage :midi
   (:use :common-lisp)
@@ -129,7 +129,7 @@ SEE:            PRINT-PARSEABLE-OBJECT
                             (list (class-name (class-of object))))
                           (funcall thunk object)
                           (when identity
-                            (list (object-identity object))))) 
+                            (list (object-identity object)))))
           object))))
 
 
@@ -336,15 +336,15 @@ works only if the chars are coded in ASCII]"
 (defun read-message ()
   "read a message without time indication from *midi-input*"
   (let ((classname-or-subtype (aref *dispatch-table* *status*)))
-    (unless classname-or-subtype 
-      (error (make-condition 'unknown-event 
+    (unless classname-or-subtype
+      (error (make-condition 'unknown-event
                              :status *status*)))
     (if (symbolp classname-or-subtype)
         (make-instance classname-or-subtype)
         (let* ((data-byte (read-next-byte))
                (classname (aref classname-or-subtype data-byte)))
           (unless classname
-            (error (make-condition 'unknown-event 
+            (error (make-condition 'unknown-event
                                    :status *status*
                                    :data-byte data-byte)))
           (unread-byte data-byte)
@@ -414,7 +414,7 @@ works only if the chars are coded in ASCII]"
           (format (read-fixed-length-quantity 2))
           (nb-tracks (read-fixed-length-quantity 2))
           (division (read-fixed-length-quantity 2)))
-      (unless (and (= length +header-mthd-length+) (= type +header-mthd+)) 
+      (unless (and (= length +header-mthd-length+) (= type +header-mthd+))
         (error (make-condition 'header :header "MThd")))
       (make-instance 'midifile
           :format format
@@ -564,16 +564,16 @@ works only if the chars are coded in ASCII]"
 
       (eval-when (:compile-toplevel :load-toplevel :execute)
         (setf (gethash ',name *slots*) (list ',(car superclasses) ',slot-names)))
-     
+
       (defmethod print-object ((self ,name) stream)
         (print-parseable-object (self stream :type t :identity nil)
                                 ,@(all-slots name)))
-     
+
       (defmethod fill-message :after ((message ,name))
                  (with-slots ,(mapcar #'car slots) message
                    (symbol-macrolet ((next-byte (read-next-byte)))
                      ,filler)))
-     
+
       (defmethod length-message + ((message ,name))
                  (with-slots (status-min status-max data-min data-max ,@(mapcar #'car slots))
                      message
@@ -586,7 +586,7 @@ works only if the chars are coded in ASCII]"
 
 (defun status-min (class-name)
   (gethash class-name *status-min*))
- 
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
 ;;; midi messages
@@ -800,7 +800,7 @@ works only if the chars are coded in ASCII]"
                  (loop for elem across data do (write-bytes elem))))
 
 (define-midi-message authorization-system-exclusive-message (system-message)
-  :status-min #xf7 :status-max #xf7  
+  :status-min #xf7 :status-max #xf7
   :slots ((data))
   :filler (loop with len = (read-variable-length-quantity)
              initially (setf data (make-array
@@ -916,8 +916,8 @@ works only if the chars are coded in ASCII]"
 
 (define-midi-message time-signature-message (meta-message tempo-map-message)
   :data-min #x58 :data-max #x58
-  :slots ((nn :reader message-numerator) 
-          (dd :reader message-denominator) 
+  :slots ((nn :reader message-numerator)
+          (dd :reader message-denominator)
           (cc) (bb))
   :filler (progn next-byte (setf nn next-byte dd next-byte
                                  cc next-byte bb next-byte))
@@ -929,7 +929,7 @@ works only if the chars are coded in ASCII]"
   :slots ((sf :initarg :sf :reader message-sf)
           (mi :initarg :mi :reader message-mi))
   :filler (progn next-byte (setf sf (let ((temp-sf next-byte))
-                                      (if (> temp-sf 127) 
+                                      (if (> temp-sf 127)
                                           (- temp-sf 256)
                                           temp-sf))
                                  mi next-byte))
@@ -940,8 +940,8 @@ works only if the chars are coded in ASCII]"
   :data-min #x7f :data-max #x7f
   :slots ((data :initarg :data :reader message-data))
   :filler (setf data (loop with len = (read-variable-length-quantity)
-                        with vec = (make-array 
-                                    len 
+                        with vec = (make-array
+                                    len
                                     :element-type '(unsigned-byte 8))
                         for i from 0 below len
                         do (setf (aref vec i) next-byte)
@@ -950,4 +950,3 @@ works only if the chars are coded in ASCII]"
                data)) ; FIXME
 
 ;;;; THE END ;;;;
-
