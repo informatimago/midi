@@ -755,8 +755,8 @@ works only if the chars are coded in ASCII]"
   :length 1
   :writer (write-bytes song))
 
-(define-midi-message tune-request-message (common-message)
-  :status-min #xf6 :status-max #xf6)
+;; (define-midi-message tune-request-message (common-message)
+;;   :status-min #xf6 :status-max #xf6)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
