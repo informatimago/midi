@@ -24,72 +24,41 @@
 ;;; represented as CLOS class instances in a class hierarchy that
 ;;; reflects interesting aspects of the messages themselves.
 
-(defpackage :midi
-  (:use :common-lisp)
-  (:export #:read-midi-file #:write-midi-file
-           #:midifile
-           #:midifile-format #:midifile-tracks #:midifile-division
-           #:message #:note-off-message #:note-on-message #:tempo-message
-           #:program-change-message #:channel-pressure-message #:pitch-bend-message
-           #:key-signature-message #:time-signature-message
-           #:control-change-message #:program-change-message
-           #:timing-clock-message #:start-sequence-message
-           #:continue-sequence-message #:stop-sequence-message
-           #:active-sensing-message
-           #:smpte-offset-message
-           #:sequence/track-name-message
-           #:tune-request-message
-           #:system-exclusive-message #:authorization-system-exclusive-message
-           #:sequence-number-message
-           #:general-text-message #:copyright-message #:sequence/track-name-message
-           #:instrument-message
-           #:lyric-message #:marker-message
-           #:cue-point-message #:program-name-message #:device-name-message #:channel-prefix-message
-           #:end-of-track-message #:tempo-message #:smpte-offset-message
-           #:time-signature-message #:key-signature-message
-           #:proprietary-event
-           #:message-channel #:message-key #:message-time
-           #:message-velocity #:message-numerator #:message-denominator
-           #:message-sf #:message-mi #:message-tempo #:message-program
-           #:message-value #:message-port #:message-text #:message-sequence
-           #:message-data #:message-pressure #:message-controller
-           #:header #:header-type
-           #:unknown-event #:status #:data-byte
-           "RESET-ALL-CONTROLLERS-MESSAGE"
-           "LOCAL-CONTROL-MESSAGE"
-           "ALL-NOTES-OFF-MESSAGE"
-           "OMNI-MODE-OFF-MESSAGE"
-           "OMNI-MODE-ON-MESSAGE"
-           "MONO-MODE-ON-MESSAGE"
-           "POLY-MODE-ON-MESSAGE"
-           "SYSTEM-MESSAGE"
-           "TEMPO-MAP-MESSAGE"
-           "COMMON-MESSAGE"
-           "TIMING-CODE-MESSAGE"
-           "SONG-POSITION-POINTER-MESSAGE"
-           "SONG-SELECT-MESSAGE"
-           "TUNE-REQUEST-MESSAGE"
-           "REAL-TIME-MESSAGE"
-           "TIMING-CLOCK-MESSAGE"
-           "START-SEQUENCE-MESSAGE"
-           "CONTINUE-SEQUENCE-MESSAGE"
-           "STOP-SEQUENCE-MESSAGE"
-           "ACTIVE-SENSING-MESSAGE"
-           "TUNE-REQUEST-MESSAGE"
-           "MESSAGE"
-           "CHANNEL-MESSAGE"
-           "VOICE-MESSAGE"
-           "NOTE-OFF-MESSAGE"
-           "NOTE-ON-MESSAGE"
-           "POLYPHONIC-KEY-PRESSURE-MESSAGE"
-           "CONTROL-CHANGE-MESSAGE"
-           "PROGRAM-CHANGE-MESSAGE"
-           "CHANNEL-PRESSURE-MESSAGE"
-           "PITCH-BEND-MESSAGE"
-           "MODE-MESSAGE"
-           #:status-min))
+(defpackage "MIDI"
+  (:use "COMMON-LISP")
+  (:export "ACTIVE-SENSING-MESSAGE" "ALL-NOTES-OFF-MESSAGE"
+           "AUTHORIZATION-SYSTEM-EXCLUSIVE-MESSAGE" "CHANNEL-MESSAGE"
+           "CHANNEL-PREFIX-MESSAGE" "CHANNEL-PRESSURE-MESSAGE"
+           "COMMON-MESSAGE" "CONTINUE-SEQUENCE-MESSAGE"
+           "CONTROL-CHANGE-MESSAGE" "COPYRIGHT-MESSAGE"
+           "CUE-POINT-MESSAGE" "DATA-BYTE" "DEVICE-NAME-MESSAGE"
+           "END-OF-TRACK-MESSAGE" "GENERAL-TEXT-MESSAGE" "HEADER"
+           "HEADER-TYPE" "INSTRUMENT-MESSAGE" "KEY-SIGNATURE-MESSAGE"
+           "LOCAL-CONTROL-MESSAGE" "LYRIC-MESSAGE" "MARKER-MESSAGE"
+           "MESSAGE" "MESSAGE-CHANNEL" "MESSAGE-CONTROLLER"
+           "MESSAGE-DATA" "MESSAGE-DENOMINATOR" "MESSAGE-KEY"
+           "MESSAGE-MI" "MESSAGE-NUMERATOR" "MESSAGE-PORT"
+           "MESSAGE-PRESSURE" "MESSAGE-PROGRAM" "MESSAGE-SEQUENCE"
+           "MESSAGE-SF" "MESSAGE-TEMPO" "MESSAGE-TEXT" "MESSAGE-TIME"
+           "MESSAGE-VALUE" "MESSAGE-VELOCITY" "MIDIFILE"
+           "MIDIFILE-DIVISION" "MIDIFILE-FORMAT" "MIDIFILE-TRACKS"
+           "MODE-MESSAGE" "MONO-MODE-ON-MESSAGE" "NOTE-OFF-MESSAGE"
+           "NOTE-ON-MESSAGE" "OMNI-MODE-OFF-MESSAGE"
+           "OMNI-MODE-ON-MESSAGE" "PITCH-BEND-MESSAGE"
+           "POLY-MODE-ON-MESSAGE" "POLYPHONIC-KEY-PRESSURE-MESSAGE"
+           "PROGRAM-CHANGE-MESSAGE" "PROGRAM-NAME-MESSAGE"
+           "PROPRIETARY-EVENT" "READ-MIDI-FILE" "REAL-TIME-MESSAGE"
+           "RESET-ALL-CONTROLLERS-MESSAGE" "SEQUENCE-NUMBER-MESSAGE"
+           "SEQUENCE/TRACK-NAME-MESSAGE" "SMPTE-OFFSET-MESSAGE"
+           "SONG-POSITION-POINTER-MESSAGE" "SONG-SELECT-MESSAGE"
+           "START-SEQUENCE-MESSAGE" "STATUS" "STATUS-MIN"
+           "STOP-SEQUENCE-MESSAGE" "SYSTEM-EXCLUSIVE-MESSAGE"
+           "SYSTEM-MESSAGE" "TEMPO-MAP-MESSAGE" "TEMPO-MESSAGE"
+           "TIME-SIGNATURE-MESSAGE" "TIMING-CLOCK-MESSAGE"
+           "TIMING-CODE-MESSAGE" "TUNE-REQUEST-MESSAGE"
+           "UNKNOWN-EVENT" "VOICE-MESSAGE" "WRITE-MIDI-FILE"))
 
-(in-package :midi)
+(in-package "MIDI")
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
