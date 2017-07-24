@@ -55,38 +55,38 @@
            #:message-data #:message-pressure #:message-controller
            #:header #:header-type
            #:unknown-event #:status #:data-byte
-   "RESET-ALL-CONTROLLERS-MESSAGE"
-   "LOCAL-CONTROL-MESSAGE"
-   "ALL-NOTES-OFF-MESSAGE"
-   "OMNI-MODE-OFF-MESSAGE"
-   "OMNI-MODE-ON-MESSAGE"
-   "MONO-MODE-ON-MESSAGE"
-   "POLY-MODE-ON-MESSAGE"
-   "SYSTEM-MESSAGE"
-   "TEMPO-MAP-MESSAGE"
-   "COMMON-MESSAGE"
-   "TIMING-CODE-MESSAGE"
-   "SONG-POSITION-POINTER-MESSAGE"
-   "SONG-SELECT-MESSAGE"
-   "TUNE-REQUEST-MESSAGE"
-   "REAL-TIME-MESSAGE"
-   "TIMING-CLOCK-MESSAGE"
-   "START-SEQUENCE-MESSAGE"
-   "CONTINUE-SEQUENCE-MESSAGE"
-   "STOP-SEQUENCE-MESSAGE"
-   "ACTIVE-SENSING-MESSAGE"
-   "TUNE-REQUEST-MESSAGE"
-   "MESSAGE"
-   "CHANNEL-MESSAGE"
-   "VOICE-MESSAGE"
-   "NOTE-OFF-MESSAGE"
-   "NOTE-ON-MESSAGE"
-   "POLYPHONIC-KEY-PRESSURE-MESSAGE"
-   "CONTROL-CHANGE-MESSAGE"
-   "PROGRAM-CHANGE-MESSAGE"
-   "CHANNEL-PRESSURE-MESSAGE"
-   "PITCH-BEND-MESSAGE"
-   "MODE-MESSAGE"
+           "RESET-ALL-CONTROLLERS-MESSAGE"
+           "LOCAL-CONTROL-MESSAGE"
+           "ALL-NOTES-OFF-MESSAGE"
+           "OMNI-MODE-OFF-MESSAGE"
+           "OMNI-MODE-ON-MESSAGE"
+           "MONO-MODE-ON-MESSAGE"
+           "POLY-MODE-ON-MESSAGE"
+           "SYSTEM-MESSAGE"
+           "TEMPO-MAP-MESSAGE"
+           "COMMON-MESSAGE"
+           "TIMING-CODE-MESSAGE"
+           "SONG-POSITION-POINTER-MESSAGE"
+           "SONG-SELECT-MESSAGE"
+           "TUNE-REQUEST-MESSAGE"
+           "REAL-TIME-MESSAGE"
+           "TIMING-CLOCK-MESSAGE"
+           "START-SEQUENCE-MESSAGE"
+           "CONTINUE-SEQUENCE-MESSAGE"
+           "STOP-SEQUENCE-MESSAGE"
+           "ACTIVE-SENSING-MESSAGE"
+           "TUNE-REQUEST-MESSAGE"
+           "MESSAGE"
+           "CHANNEL-MESSAGE"
+           "VOICE-MESSAGE"
+           "NOTE-OFF-MESSAGE"
+           "NOTE-ON-MESSAGE"
+           "POLYPHONIC-KEY-PRESSURE-MESSAGE"
+           "CONTROL-CHANGE-MESSAGE"
+           "PROGRAM-CHANGE-MESSAGE"
+           "CHANNEL-PRESSURE-MESSAGE"
+           "PITCH-BEND-MESSAGE"
+           "MODE-MESSAGE"
            #:status-min))
 
 (in-package :midi)
@@ -108,8 +108,8 @@ RETURN:         A string containing the object identity as printed by
   (let ((*step-mode* :run)
         (*print-readably* nil))
     (let ((ident
-           (with-output-to-string (stream)
-             (print-unreadable-object (object stream :type nil :identity t)))))
+            (with-output-to-string (stream)
+              (print-unreadable-object (object stream :type nil :identity t)))))
       (if (< 3 (length ident))
           (subseq ident 3 (1- (length ident)))
           ident))))
@@ -232,7 +232,7 @@ RETURN:         The object that bas been printed (so that you can use
 works only if the chars are coded in ASCII]"
     (let ((v 0))
       (loop for i from 0 to (1- (length s))
-         do (setf v (+ (* v 256) (char-code (aref s i)))))
+            do (setf v (+ (* v 256) (char-code (aref s i)))))
       v)))
 
 (defconstant +header-mthd+ #.(string-code "MThd"))
@@ -271,9 +271,9 @@ works only if the chars are coded in ASCII]"
 (defun read-fixed-length-quantity (nb-bytes)
   "read an unsigned integer of nb-bytes bytes from *midi-input*"
   (loop with result = 0
-     for i from 1 to nb-bytes
-     do (setf result (logior (ash result 8) (read-next-byte)))
-     finally (return result)))
+        for i from 1 to nb-bytes
+        do (setf result (logior (ash result 8) (read-next-byte)))
+        finally (return result)))
 
 (defun write-fixed-length-quantity (quantity nb-bytes)
   "write an unsigned integer of nb-bytes bytes to *midi-output*"
@@ -298,11 +298,11 @@ works only if the chars are coded in ASCII]"
 (defun read-variable-length-quantity ()
   "read a MIDI variable length quantity from *midi-input*"
   (loop with result = 0
-     with byte
-     do (setf byte (read-next-byte)
-              result (logior (ash result 7) (logand byte #x7f)))
-     until (< byte #x80)
-     finally (return result)))
+        with byte
+        do (setf byte (read-next-byte)
+                 result (logior (ash result 7) (logand byte #x7f)))
+        until (< byte #x80)
+        finally (return result)))
 
 (defun write-variable-length-quantity (quantity &optional (termination 0))
   (when (> quantity 127)
@@ -381,9 +381,9 @@ works only if the chars are coded in ASCII]"
     (unless (= type +header-mtrk+)
       (error (make-condition 'header :header "MTrk")))
     (loop with message = nil
-       do (setf message (read-timed-message))
-       until (typep message 'end-of-track-message)
-       collect message)))
+          do (setf message (read-timed-message))
+          until (typep message 'end-of-track-message)
+          collect message)))
 
 (defun write-track (track)
   "write a track (which does not contain the end-of-track message"
@@ -394,10 +394,10 @@ works only if the chars are coded in ASCII]"
      (+ (reduce #'+ track :key #'length-message)
         (length-message end-of-track-message)
         (loop with time = *time*
-           for message in track
-           sum (prog1 (length-of-variables-length-quantity
-                       (- (message-time message) time))
-                 (setf time (message-time message))))
+              for message in track
+              sum (prog1 (length-of-variables-length-quantity
+                          (- (message-time message) time))
+                    (setf time (message-time message))))
         1) ; the delta time of the end-of-track message
      4)
     (dolist (message track)
@@ -417,11 +417,11 @@ works only if the chars are coded in ASCII]"
       (unless (and (= length +header-mthd-length+) (= type +header-mthd+))
         (error (make-condition 'header :header "MThd")))
       (make-instance 'midifile
-          :format format
-          :division division
-          :tracks (loop repeat nb-tracks
-                     do (when (= format 1) (setf *time* 0))
-                     collect (read-track))))))
+                     :format format
+                     :division division
+                     :tracks (loop repeat nb-tracks
+                                   do (when (= format 1) (setf *time* 0))
+                                   collect (read-track))))))
 
 (defun write-midi-file (midifile filename)
   (with-midi-output (filename :if-exists :supersede)
@@ -433,9 +433,9 @@ works only if the chars are coded in ASCII]"
       (write-fixed-length-quantity division 2)
       (setf *time* 0)
       (loop for track in tracks do
-           (write-track track)
-           (when (= (slot-value midifile 'format) 1)
-             (setf *time* 0))))))
+        (write-track track)
+        (when (= (slot-value midifile 'format) 1)
+          (setf *time* 0))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
@@ -509,13 +509,13 @@ works only if the chars are coded in ASCII]"
                  (let ((secondary-dispatch (make-array 256
                                                        :initial-element nil)))
                    (loop for i from status-min to status-max do
-                        (setf (aref *dispatch-table* i) secondary-dispatch))))
+                     (setf (aref *dispatch-table* i) secondary-dispatch))))
                (loop for i from data-min to data-max do
-                    (setf (aref (aref *dispatch-table* status-min) i)
-                          class)))
+                 (setf (aref (aref *dispatch-table* status-min) i)
+                       class)))
         (loop for i from status-min to status-max do
-             (setf (aref *dispatch-table* i)
-                   class)))))
+          (setf (aref *dispatch-table* i)
+                class)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
@@ -550,39 +550,39 @@ works only if the chars are coded in ASCII]"
                                &key slots filler (length 0) writer
                                  status-min status-max data-min data-max)
   (let ((slot-names (mapcar (lambda (x) (if (symbolp x) x (first x))) slots)))
-   `(progn
+    `(progn
 
-      (register-class ',name ',(car superclasses)
-                      ,status-min ,status-max ,data-min ,data-max)
+       (register-class ',name ',(car superclasses)
+                       ,status-min ,status-max ,data-min ,data-max)
 
-      (defclass ,name ,superclasses
-        ((status-min :initform ,status-min :allocation :class)
-         (status-max :initform ,status-max :allocation :class)
-         (data-min :initform ,data-min :allocation :class)
-         (data-max :initform ,data-max :allocation :class)
-         ,@slots))
+       (defclass ,name ,superclasses
+         ((status-min :initform ,status-min :allocation :class)
+          (status-max :initform ,status-max :allocation :class)
+          (data-min :initform ,data-min :allocation :class)
+          (data-max :initform ,data-max :allocation :class)
+          ,@slots))
 
-      (eval-when (:compile-toplevel :load-toplevel :execute)
-        (setf (gethash ',name *slots*) (list ',(car superclasses) ',slot-names)))
+       (eval-when (:compile-toplevel :load-toplevel :execute)
+         (setf (gethash ',name *slots*) (list ',(car superclasses) ',slot-names)))
 
-      (defmethod print-object ((self ,name) stream)
-        (print-parseable-object (self stream :type t :identity nil)
-                                ,@(all-slots name)))
+       (defmethod print-object ((self ,name) stream)
+         (print-parseable-object (self stream :type t :identity nil)
+                                 ,@(all-slots name)))
 
-      (defmethod fill-message :after ((message ,name))
-                 (with-slots ,(mapcar #'car slots) message
-                   (symbol-macrolet ((next-byte (read-next-byte)))
-                     ,filler)))
+       (defmethod fill-message :after ((message ,name))
+         (with-slots ,(mapcar #'car slots) message
+           (symbol-macrolet ((next-byte (read-next-byte)))
+             ,filler)))
 
-      (defmethod length-message + ((message ,name))
-                 (with-slots (status-min status-max data-min data-max ,@(mapcar #'car slots))
-                     message
-                   ,length))
+       (defmethod length-message + ((message ,name))
+         (with-slots (status-min status-max data-min data-max ,@(mapcar #'car slots))
+             message
+           ,length))
 
-      (defmethod write-message :after ((message ,name))
-                 (with-slots (status-min status-max data-min data-max ,@(mapcar #'car slots))
-                     message
-                   ,writer)))))
+       (defmethod write-message :after ((message ,name))
+         (with-slots (status-min status-max data-min data-max ,@(mapcar #'car slots))
+             message
+           ,writer)))))
 
 (defun status-min (class-name)
   (gethash class-name *status-min*))
@@ -780,7 +780,7 @@ works only if the chars are coded in ASCII]"
   :status-min #xfe :status-max #xfe)
 
 (define-midi-message tune-request-message (real-time-message)
- :status-min #xf6 :status-max #xf6)
+  :status-min #xf6 :status-max #xf6)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
@@ -790,10 +790,10 @@ works only if the chars are coded in ASCII]"
   :status-min #xf0 :status-max #xf0
   :slots ((data))
   :filler (loop with len = (read-variable-length-quantity)
-             initially (setf data (make-array
-                                   len :element-type '(unsigned-byte 8)))
-             for i from 0 below len
-             do (setf (aref data i) next-byte))
+                  initially (setf data (make-array
+                                        len :element-type '(unsigned-byte 8)))
+                for i from 0 below len
+                do (setf (aref data i) next-byte))
   :length (+ (length-of-variables-length-quantity (length data))
              (length data))
   :writer (progn (write-variable-length-quantity (length data))
@@ -803,10 +803,10 @@ works only if the chars are coded in ASCII]"
   :status-min #xf7 :status-max #xf7
   :slots ((data))
   :filler (loop with len = (read-variable-length-quantity)
-             initially (setf data (make-array
-                                   len :element-type '(unsigned-byte 8)))
-             for i from 0 below len
-             do (setf (aref data i) next-byte))
+                  initially (setf data (make-array
+                                        len :element-type '(unsigned-byte 8)))
+                for i from 0 below len
+                do (setf (aref data i) next-byte))
   :length (+ (length-of-variables-length-quantity (length data))
              (length data))
   :writer (progn (write-variable-length-quantity (length data))
@@ -836,15 +836,15 @@ works only if the chars are coded in ASCII]"
 (define-midi-message text-message (meta-message)
   :slots ((text :initarg :text :reader message-text))
   :filler (setf text (loop with len = next-byte
-                        with str = (make-string len)
-                        for i from 0 below len
-                        do (setf (aref str i)
-                                 (code-char next-byte))
-                        finally (return str)))
+                           with str = (make-string len)
+                           for i from 0 below len
+                           do (setf (aref str i)
+                                    (code-char next-byte))
+                           finally (return str)))
   :length (length text)
   :writer (progn (write-bytes (length text))
                  (loop for char across text do
-                      (write-bytes (char-code char)))))
+                   (write-bytes (char-code char)))))
 
 
 (define-midi-message general-text-message (text-message)
@@ -940,13 +940,13 @@ works only if the chars are coded in ASCII]"
   :data-min #x7f :data-max #x7f
   :slots ((data :initarg :data :reader message-data))
   :filler (setf data (loop with len = (read-variable-length-quantity)
-                        with vec = (make-array
-                                    len
-                                    :element-type '(unsigned-byte 8))
-                        for i from 0 below len
-                        do (setf (aref vec i) next-byte)
-                        finally (return vec)))
+                           with vec = (make-array
+                                       len
+                                       :element-type '(unsigned-byte 8))
+                           for i from 0 below len
+                           do (setf (aref vec i) next-byte)
+                           finally (return vec)))
   :writer (map nil (lambda (byte) (write-bytes byte))
-               data)) ; FIXME
+            data)) ; FIXME
 
 ;;;; THE END ;;;;
