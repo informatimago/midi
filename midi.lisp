@@ -56,7 +56,8 @@
            "SYSTEM-MESSAGE" "TEMPO-MAP-MESSAGE" "TEMPO-MESSAGE"
            "TIME-SIGNATURE-MESSAGE" "TIMING-CLOCK-MESSAGE"
            "TIMING-CODE-MESSAGE" "TUNE-REQUEST-MESSAGE"
-           "UNKNOWN-EVENT" "VOICE-MESSAGE" "WRITE-MIDI-FILE"))
+           "UNKNOWN-EVENT" "STRAY-DATA-BYTE-ERROR" "VOICE-MESSAGE"
+           "WRITE-MIDI-FILE"))
 
 (in-package "MIDI")
 
@@ -103,7 +104,8 @@ SEE:            PRINT-PARSEABLE-OBJECT
 
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defun extract-slots (ovar slots)
+
+  (defun extract-slots-form (ovar slots)
     "
 SEE:            PRINT-PARSEABLE-OBJECT
 RETURN:         A form building a plist of slot values.
@@ -118,7 +120,23 @@ RETURN:         A form building a plist of slot values.
                           `(ignore-errors (if (slot-boundp ,ovar ',slot)
                                               (slot-value ,ovar ',slot)
                                               '#:<UNBOUND>))
-                          `(ignore-errors ,(second slot)))))))
+                          `(ignore-errors ,(second slot))))))
+
+  (defun extract-slots (object slots)
+    "
+SEE:            PRINT-PARSEABLE-OBJECT
+RETURN:         A plist of slot values.
+"
+    (loop
+      :for slot :in slots
+      :collect  (if (symbolp slot)
+                    (intern (symbol-name slot) "KEYWORD")
+                    (first slot))
+      :collect  (if (symbolp slot)
+                    (ignore-errors (if (slot-boundp object slot)
+                                       (slot-value object slot)
+                                       '#:<UNBOUND>))
+                    (second slot)))))
 
 
 (defmacro print-parseable-object ((object stream &key (type t) identity) &rest slots)
@@ -156,13 +174,13 @@ RETURN:         The object that bas been printed (so that you can use
           `(call-print-parseable-object ,object ,stream ,type ,identity
                                         (lambda (,object)
                                           (declare (ignorable ,object) (stepper disable))
-                                          ,(extract-slots object slots)))
+                                          ,(extract-slots-form object slots)))
           (destructuring-bind (ovar oval) object
             `(let ((,ovar ,oval))
                (call-print-parseable-object ,ovar ,stream ,type ,identity
                                             (lambda (,ovar)
                                               (declare (ignorable ,ovar) (stepper disable))
-                                              ,(extract-slots ovar slots))))))))
+                                              ,(extract-slots-form ovar slots))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
@@ -177,7 +195,7 @@ RETURN:         The object that bas been printed (so that you can use
 ;;;
 ;;; Message protocol
 
-(defgeneric message-time (message))
+(defgeneric message-time(message))
 (defgeneric (setf message-time) (time message))
 (defgeneric message-status (message))
 (defgeneric message-channel (message))
@@ -208,14 +226,19 @@ works only if the chars are coded in ASCII]"
 (defconstant +header-mtrk+ #.(string-code "MTrk"))
 (defconstant +header-mthd-length+ 6 "value of the header MThd data's length")
 
-(defparameter *midi-input* nil "stream for reading a Midifile")
-(defparameter *input-buffer* '() "used for unreading bytes from *midi-input")
-(defparameter *midi-output* nil "stream for writing a Midifile")
+(defparameter *midi-input*    nil "Stream for reading a Midifile")
+(defparameter *input-buffer*  '() "A list or a vector with fill-pointer.  Used for unreading bytes from *MIDI-INPUT; also to read from buffer instead of stream.")
+(defparameter *midi-output*   nil "Stream for writing a Midifile")
+(defparameter *output-buffer* nil "(OR NULL VECTOR). If vector with a fill-pointer, it's used to write the bytes instead of the *MIDI-OUTPUT* stream.")
 
 (define-condition unknown-event ()
   ((status :initarg :status :reader status)
    (data-byte :initform "" :initarg :data-byte :reader data-byte))
   (:documentation "condition when the event does not exist in the library"))
+
+(define-condition stray-data-byte-error (unknown-event)
+  ()
+  (:documentation "condition when we read a data byte when a status byte was expected"))
 
 (define-condition header ()
   ((header-type :initarg :header :reader header-type))
@@ -225,17 +248,22 @@ works only if the chars are coded in ASCII]"
 
 (defun read-next-byte ()
   "read an unsigned 8-bit byte from *midi-input* checking for unread bytes"
-  (if *input-buffer*
-      (pop *input-buffer*)
-      (read-byte *midi-input*)))
+  (etypecase *input-buffer*
+    (null   (read-byte *midi-input*))
+    (cons   (pop *input-buffer*))
+    (vector (vector-pop *input-buffer*))))
 
 (defun unread-byte (byte)
   "unread a byte from *midi-input*"
-  (push byte *input-buffer*))
+  (etypecase *input-buffer*
+    (list   (push byte *input-buffer*))
+    (vector (vector-push-extend byte *input-buffer*))))
 
 (defun write-bytes (&rest bytes)
   "write an arbitrary number of bytes to *midi-output*"
-  (mapc #'(lambda (byte) (write-byte byte *midi-output*)) bytes))
+  (etypecase *output-buffer*
+    (null   (mapc (lambda (byte) (write-byte byte *midi-output*))           bytes))
+    (vector (mapc (lambda (byte) (vector-push-extend byte *output-buffer*)) bytes))))
 
 (defun read-fixed-length-quantity (nb-bytes)
   "read an unsigned integer of nb-bytes bytes from *midi-input*"
@@ -304,35 +332,37 @@ works only if the chars are coded in ASCII]"
 
 (defun read-message ()
   "read a message without time indication from *midi-input*"
-  (let ((classname-or-subtype (aref *dispatch-table* *status*)))
-    (unless classname-or-subtype
-      (error (make-condition 'unknown-event
-                             :status *status*)))
-    (if (symbolp classname-or-subtype)
-        (make-instance classname-or-subtype)
-        (let* ((data-byte (read-next-byte))
-               (classname (aref classname-or-subtype data-byte)))
-          (unless classname
-            (error (make-condition 'unknown-event
-                                   :status *status*
-                                   :data-byte data-byte)))
-          (unread-byte data-byte)
-          (make-instance classname)))))
-
-(defparameter *time* 0 "accumulated time from the start of the track")
-
-(defun read-timed-message ()
-  "read a message preceded with a delta-time indication"
-  (let ((delta-time (read-variable-length-quantity))
-        (status-or-data (read-next-byte)))
+  (let ((status-or-data (read-next-byte)))
     (if (>= status-or-data #x80)
         (progn (setf *status* status-or-data)
                (when (<= *status* #xef)
                  (setf *running-status* *status*)))
         (progn (unread-byte status-or-data)
                (setf *status* *running-status*)))
-    (let ((message (read-message)))
+    (let ((message (let ((classname-or-subtype (aref *dispatch-table* *status*)))
+                     (unless classname-or-subtype
+                       (error (make-condition (if (< *status* 128)
+                                                  'stray-data-byte-error
+                                                  'unknown-event) :status *status*)))
+                     (if (symbolp classname-or-subtype)
+                         (make-instance classname-or-subtype)
+                         (let* ((data-byte (read-next-byte))
+                                (classname (aref classname-or-subtype data-byte)))
+                           (unless classname
+                             (error (make-condition 'unknown-event
+                                                    :status *status*
+                                                    :data-byte data-byte)))
+                           (unread-byte data-byte)
+                           (make-instance classname))))))
       (fill-message message)
+      message)))
+
+(defparameter *time* 0 "accumulated time from the start of the track")
+
+(defun read-timed-message ()
+  "read a message preceded with a delta-time indication"
+  (let ((delta-time (read-variable-length-quantity)))
+    (let ((message (read-message)))
       (setf (message-time message) (incf *time* delta-time))
       message)))
 
@@ -521,9 +551,6 @@ works only if the chars are coded in ASCII]"
   (let ((slot-names (mapcar (lambda (x) (if (symbolp x) x (first x))) slots)))
     `(progn
 
-       (register-class ',name ',(car superclasses)
-                       ,status-min ,status-max ,data-min ,data-max)
-
        (defclass ,name ,superclasses
          ((status-min :initform ,status-min :allocation :class)
           (status-max :initform ,status-max :allocation :class)
@@ -535,23 +562,30 @@ works only if the chars are coded in ASCII]"
          (setf (gethash ',name *slots*) (list ',(car superclasses) ',slot-names)))
 
        (defmethod print-object ((self ,name) stream)
-         (print-parseable-object (self stream :type t :identity nil)
-                                 ,@(all-slots name)))
+         (call-print-parseable-object self stream t nil
+                                      (lambda (object)
+                                        (declare (ignorable object) (stepper disable))
+                                        (extract-slots object (all-slots ',name)))))
 
        (defmethod fill-message :after ((message ,name))
-         (with-slots ,(mapcar #'car slots) message
+         (with-slots ,slot-names message
            (symbol-macrolet ((next-byte (read-next-byte)))
              ,filler)))
 
        (defmethod length-message + ((message ,name))
-         (with-slots (status-min status-max data-min data-max ,@(mapcar #'car slots))
+         (with-slots (status-min status-max data-min data-max ,@slot-names)
              message
            ,length))
 
        (defmethod write-message :after ((message ,name))
-         (with-slots (status-min status-max data-min data-max ,@(mapcar #'car slots))
+         (with-slots (status-min status-max data-min data-max ,@slot-names)
              message
-           ,writer)))))
+           ,writer))
+
+       (register-class ',name ',(car superclasses)
+                       ,status-min ,status-max ,data-min ,data-max)
+
+       ',name)))
 
 (defun status-min (class-name)
   (gethash class-name *status-min*))
@@ -724,14 +758,14 @@ works only if the chars are coded in ASCII]"
   :length 1
   :writer (write-bytes song))
 
-;; (define-midi-message tune-request-message (common-message)
-;;   :status-min #xf6 :status-max #xf6)
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
 ;;; system real-time messages
 
 (define-midi-message real-time-message (system-message))
+
+(define-midi-message tune-request-message (real-time-message)
+  :status-min #xf6 :status-max #xf6)
 
 (define-midi-message timing-clock-message (real-time-message)
   :status-min #xf8 :status-max #xf8)
@@ -748,8 +782,6 @@ works only if the chars are coded in ASCII]"
 (define-midi-message active-sensing-message (real-time-message)
   :status-min #xfe :status-max #xfe)
 
-(define-midi-message tune-request-message (real-time-message)
-  :status-min #xf6 :status-max #xf6)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
