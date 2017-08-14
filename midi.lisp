@@ -57,10 +57,16 @@
            "TIME-SIGNATURE-MESSAGE" "TIMING-CLOCK-MESSAGE"
            "TIMING-CODE-MESSAGE" "TUNE-REQUEST-MESSAGE"
            "UNKNOWN-EVENT" "STRAY-DATA-BYTE-ERROR" "VOICE-MESSAGE"
-           "WRITE-MIDI-FILE"))
+           "WRITE-MIDI-FILE")
+  (:export ;; extensions
+   "ACTUAL-READ-NEXT-BYTE" "ACTUAL-UNREAD-BYTE" "ACTUAL-WRITE-BYTES"
+   "READ-MIDI-MESSAGE" "WRITE-MIDI-MESSAGE"
+   "MESSAGE-LENGTH"))
 
 (in-package "MIDI")
 
+(deftype octet () '(unsigned-byte 8))
+(defun make-octet-vector (size) (make-array size :element-type 'octet))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
@@ -206,7 +212,6 @@ RETURN:         The object that bas been printed (so that you can use
 (defgeneric message-denominator (message))
 (defgeneric message-sf (message))
 (defgeneric message-mi (message))
-;; added 03-05-07
 (defgeneric message-program (message))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -226,10 +231,7 @@ works only if the chars are coded in ASCII]"
 (defconstant +header-mtrk+ #.(string-code "MTrk"))
 (defconstant +header-mthd-length+ 6 "value of the header MThd data's length")
 
-(defparameter *midi-input*    nil "Stream for reading a Midifile")
-(defparameter *input-buffer*  '() "A list or a vector with fill-pointer.  Used for unreading bytes from *MIDI-INPUT; also to read from buffer instead of stream.")
-(defparameter *midi-output*   nil "Stream for writing a Midifile")
-(defparameter *output-buffer* nil "(OR NULL VECTOR). If vector with a fill-pointer, it's used to write the bytes instead of the *MIDI-OUTPUT* stream.")
+
 
 (define-condition unknown-event ()
   ((status :initarg :status :reader status)
@@ -246,31 +248,111 @@ works only if the chars are coded in ASCII]"
              (format stream "Invalid header type ~S" (header-type condition))))
   (:documentation "condition when the header is not correct"))
 
+
+
+(defgeneric actual-read-next-byte   (source)
+  (:documentation "Get a byte from the SOURCE.
+RETURN: The byte read; the SOURCE (or a new source for next bytes)."))
+
+(defgeneric actual-unread-next-byte (source byte)
+  (:documentation "Unread a byte.
+RETURN: the SOURCE (or a new source for next bytes)."))
+
+(defgeneric actual-write-bytes      (destination bytes)
+  (:documentation "Writes a sequence of BYTES to the destination.
+RETURN: the DESTINATION (or a new destination for the following bytes)"))
+
+
+
+(defmethod actual-read-next-byte   ((buffer vector))
+  (values (vector-pop buffer)
+          buffer))
+
+(defmethod actual-unread-next-byte ((buffer vector) byte)
+  (vector-push-extend byte buffer)
+  buffer)
+
+(defmethod actual-write-bytes      ((buffer vector) bytes)
+  (map nil (lambda (byte) (vector-push-extend byte buffer)) bytes)
+  buffer)
+
+
+;; A cons cell is used to wrap lists (stored in the cdr):
+(defmethod actual-read-next-byte   ((buffer cons))
+  (values (pop (cdr buffer))
+          ;; Cf.  (actual-unread-next-byte stream byte)
+          (if (listp (cdr buffer))
+              buffer
+              (cdr buffer))))
+
+(defmethod actual-unread-next-byte ((buffer cons) byte)
+  (push byte (cdr buffer))
+  buffer)
+
+;; No write on a list (we would have to append to the end).
+
+
+
+(defmethod actual-read-next-byte   ((stream stream))
+  (values (read-byte stream)
+          stream))
+
+(defmethod actual-unread-byte      ((stream stream) byte)
+  ;; No unread-byte in CL…
+  (cons nil (cons byte stream)))
+
+(defmethod actual-write-bytes      ((stream stream) bytes)
+  (write-sequence bytes stream)
+  stream)
+
+
+
+(defparameter *midi-input*    nil
+  "
+May be:
+- a stream for reading a Midifile,
+- a cons cell whose cdr is a list of bytes (with possibly a tail of another class),
+- a possibly adjustable vector with fill-pointer,
+- or some other class of object provided an implementation of the
+  actual-read-next-byte and actual-unread-byte methods.
+")
+
+
+(defparameter *midi-output*   nil
+    "
+May be:
+- a stream for writing a Midifile,
+- a cons cell whose cdr is a list of bytes (with possibly a tail of another class),
+- a possibly adjustable vector with fill-pointer,
+- or some other class of object provided an implementation of the
+  actual-write-bytes method.
+")
+
+
+(declaim (inline read-next-byte unread-byte write-bytes))
+
 (defun read-next-byte ()
   "read an unsigned 8-bit byte from *midi-input* checking for unread bytes"
-  (etypecase *input-buffer*
-    (null   (read-byte *midi-input*))
-    (cons   (pop *input-buffer*))
-    (vector (vector-pop *input-buffer*))))
+  (let (byte)
+    (multiple-value-setq (byte *midi-input*) (actual-read-next-byte *midi-input*))
+    byte))
 
 (defun unread-byte (byte)
   "unread a byte from *midi-input*"
-  (etypecase *input-buffer*
-    (list   (push byte *input-buffer*))
-    (vector (vector-push-extend byte *input-buffer*))))
+  (setf *midi-input* (actual-unread-byte *midi-input* byte)))
 
 (defun write-bytes (&rest bytes)
   "write an arbitrary number of bytes to *midi-output*"
-  (etypecase *output-buffer*
-    (null   (mapc (lambda (byte) (write-byte byte *midi-output*))           bytes))
-    (vector (mapc (lambda (byte) (vector-push-extend byte *output-buffer*)) bytes))))
+  (setf *midi-output* (actual-write-bytes *midi-output* bytes)))
+
+
 
 (defun read-fixed-length-quantity (nb-bytes)
   "read an unsigned integer of nb-bytes bytes from *midi-input*"
-  (loop with result = 0
-        for i from 1 to nb-bytes
-        do (setf result (logior (ash result 8) (read-next-byte)))
-        finally (return result)))
+  (loop :with result := 0
+        :for i :from 1 :to nb-bytes
+        :do (setf result (logior (ash result 8) (read-next-byte)))
+        :finally (return result)))
 
 (defun write-fixed-length-quantity (quantity nb-bytes)
   "write an unsigned integer of nb-bytes bytes to *midi-output*"
@@ -281,25 +363,25 @@ works only if the chars are coded in ASCII]"
 (defmacro with-midi-input ((pathname &rest open-args &key &allow-other-keys) &body body)
   "execute body with *midi-input* assigned to a stream from pathname"
   `(with-open-file (*midi-input* ,pathname
-                                 :direction :input :element-type '(unsigned-byte 8)
+                                 :direction :input :element-type 'octet
                                  ,@open-args)
      ,@body))
 
 (defmacro with-midi-output ((pathname &rest open-args &key &allow-other-keys) &body body)
   "execute body with *midi-output* assigned to a stream from pathname"
   `(with-open-file (*midi-output* ,pathname
-                                  :direction :output :element-type '(unsigned-byte 8)
+                                  :direction :output :element-type 'octet
                                   ,@open-args)
      ,@body))
 
 (defun read-variable-length-quantity ()
   "read a MIDI variable length quantity from *midi-input*"
-  (loop with result = 0
-        with byte
-        do (setf byte (read-next-byte)
-                 result (logior (ash result 7) (logand byte #x7f)))
-        until (< byte #x80)
-        finally (return result)))
+  (loop :with result = 0
+        :with byte
+        :do (setf byte (read-next-byte)
+                  result (logior (ash result 7) (logand byte #x7f)))
+        :until (< byte #x80)
+        :finally (return result)))
 
 (defun write-variable-length-quantity (quantity &optional (termination 0))
   (when (> quantity 127)
@@ -325,10 +407,12 @@ works only if the chars are coded in ASCII]"
   (print-parseable-object (self stream :type t :identity nil)
                           format division track))
 
-(defparameter *status* nil "the status while reading an event")
-(defparameter *running-status* 144 "the running status while reading an event")
-(defparameter *dispatch-table* (make-array 256 :initial-element nil)
+(defvar *dispatch-table* (make-array 256 :initial-element nil)
   "given values of status (and perhaps data1), find a class to create")
+
+(defvar *status*         nil "the status while reading an event")
+(defvar *running-status* 144 "the running status while reading an event")
+
 
 (defun read-message ()
   "read a message without time indication from *midi-input*"
@@ -341,23 +425,23 @@ works only if the chars are coded in ASCII]"
                (setf *status* *running-status*)))
     (let ((message (let ((classname-or-subtype (aref *dispatch-table* *status*)))
                      (unless classname-or-subtype
-                       (error (make-condition (if (< *status* 128)
-                                                  'stray-data-byte-error
-                                                  'unknown-event) :status *status*)))
+                       (error (if (< *status* 128)
+                                  'stray-data-byte-error
+                                  'unknown-event) :status *status*))
                      (if (symbolp classname-or-subtype)
                          (make-instance classname-or-subtype)
                          (let* ((data-byte (read-next-byte))
                                 (classname (aref classname-or-subtype data-byte)))
                            (unless classname
-                             (error (make-condition 'unknown-event
-                                                    :status *status*
-                                                    :data-byte data-byte)))
+                             (error 'unknown-event
+                                    :status *status*
+                                    :data-byte data-byte))
                            (unread-byte data-byte)
                            (make-instance classname))))))
       (fill-message message)
       message)))
 
-(defparameter *time* 0 "accumulated time from the start of the track")
+(defvar *time* 0 "accumulated time from the start of the track")
 
 (defun read-timed-message ()
   "read a message preceded with a delta-time indication"
@@ -390,8 +474,8 @@ works only if the chars are coded in ASCII]"
   (let ((end-of-track-message (make-instance 'end-of-track-message)))
     ;; write the length of the track
     (write-fixed-length-quantity
-     (+ (reduce #'+ track :key #'length-message)
-        (length-message end-of-track-message)
+     (+ (reduce #'+ track :key #'message-length)
+        (message-length end-of-track-message)
         (loop with time = *time*
               for message in track
               sum (prog1 (length-of-variables-length-quantity
@@ -406,35 +490,36 @@ works only if the chars are coded in ASCII]"
 
 (defun read-midi-file (filename)
   "read an entire Midifile from the file with name given as argument"
-  (setf *time* 0)
-  (with-midi-input (filename)
-    (let ((type (read-fixed-length-quantity 4))
-          (length (read-fixed-length-quantity 4))
-          (format (read-fixed-length-quantity 2))
-          (nb-tracks (read-fixed-length-quantity 2))
-          (division (read-fixed-length-quantity 2)))
-      (unless (and (= length +header-mthd-length+) (= type +header-mthd+))
-        (error (make-condition 'header :header "MThd")))
-      (make-instance 'midifile
-                     :format format
-                     :division division
-                     :tracks (loop repeat nb-tracks
-                                   do (when (= format 1) (setf *time* 0))
-                                   collect (read-track))))))
+  (let ((*time* 0))
+    (with-midi-input (filename)
+      (let ((type (read-fixed-length-quantity 4))
+            (length (read-fixed-length-quantity 4))
+            (format (read-fixed-length-quantity 2))
+            (nb-tracks (read-fixed-length-quantity 2))
+            (division (read-fixed-length-quantity 2)))
+        (unless (and (= length +header-mthd-length+) (= type +header-mthd+))
+          (error 'header :header "MThd"))
+        (make-instance 'midifile
+                       :format format
+                       :division division
+                       :tracks (loop repeat nb-tracks
+                                     do (when (= format 1) (setf *time* 0))
+                                     collect (read-track)))))))
 
 (defun write-midi-file (midifile filename)
-  (with-midi-output (filename :if-exists :supersede)
-    (write-fixed-length-quantity +header-mthd+ 4)
-    (write-fixed-length-quantity +header-mthd-length+ 4)
-    (with-slots (format division tracks) midifile
-      (write-fixed-length-quantity format 2)
-      (write-fixed-length-quantity (length tracks) 2)
-      (write-fixed-length-quantity division 2)
-      (setf *time* 0)
-      (loop for track in tracks do
-        (write-track track)
-        (when (= (slot-value midifile 'format) 1)
-          (setf *time* 0))))))
+  (let ((*time* 0))
+    (with-midi-output (filename :if-exists :supersede)
+      (write-fixed-length-quantity +header-mthd+ 4)
+      (write-fixed-length-quantity +header-mthd-length+ 4)
+      (with-slots (format division tracks) midifile
+        (write-fixed-length-quantity format 2)
+        (write-fixed-length-quantity (length tracks) 2)
+        (write-fixed-length-quantity division 2)
+        (setf *time* 0)
+        (loop for track in tracks do
+          (write-track track)
+          (when (= (slot-value midifile 'format) 1)
+            (setf *time* 0)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
@@ -478,13 +563,13 @@ works only if the chars are coded in ASCII]"
 ;;;
 ;;; Macro for defining midi messages
 
-(defparameter *status-min* (make-hash-table :test #'eq)
+(defvar *status-min* (make-hash-table :test #'eq)
   "given a class name, find the minimum status value for the type of message")
-(defparameter *status-max* (make-hash-table :test #'eq)
+(defvar *status-max* (make-hash-table :test #'eq)
   "given a class name, find the maximum status value for the type of message")
-(defparameter *data-min* (make-hash-table :test #'eq)
+(defvar *data-min* (make-hash-table :test #'eq)
   "given a class name, find the minimum data1 value for the type of message")
-(defparameter *data-max* (make-hash-table :test #'eq)
+(defvar *data-max* (make-hash-table :test #'eq)
   "given a class name, find the maximum data1 value for the type of message")
 
 (defun register-class (class superclass status-min status-max data-min data-max)
@@ -505,16 +590,13 @@ works only if the chars are coded in ASCII]"
   (when status-min
     (if data-min
         (progn (unless (arrayp (aref *dispatch-table* status-min))
-                 (let ((secondary-dispatch (make-array 256
-                                                       :initial-element nil)))
-                   (loop for i from status-min to status-max do
-                     (setf (aref *dispatch-table* i) secondary-dispatch))))
-               (loop for i from data-min to data-max do
-                 (setf (aref (aref *dispatch-table* status-min) i)
-                       class)))
-        (loop for i from status-min to status-max do
-          (setf (aref *dispatch-table* i)
-                class)))))
+                 (let ((secondary-dispatch (make-array 256 :initial-element nil)))
+                   (loop :for i :from status-min :to status-max
+                         :do (setf (aref *dispatch-table* i) secondary-dispatch))))
+               (loop :for i :from data-min :to data-max
+                     :do (setf (aref (aref *dispatch-table* status-min) i) class)))
+        (loop :for i :from status-min :to status-max
+              :do (setf (aref *dispatch-table* i) class)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
@@ -522,14 +604,14 @@ works only if the chars are coded in ASCII]"
 
 (defgeneric fill-message (message))
 (defgeneric write-message (message))
-(defgeneric length-message (message)
+(defgeneric message-length (message)
   (:method-combination +))
 
 (defmethod fill-message (message)
   (declare (ignore message))
   nil)
 
-(defmethod length-message + (message)
+(defmethod message-length + (message)
   (declare (ignore message))
   0)
 
@@ -572,7 +654,7 @@ works only if the chars are coded in ASCII]"
            (symbol-macrolet ((next-byte (read-next-byte)))
              ,filler)))
 
-       (defmethod length-message + ((message ,name))
+       (defmethod message-length + ((message ,name))
          (with-slots (status-min status-max data-min data-max ,@slot-names)
              message
            ,length))
@@ -604,6 +686,23 @@ works only if the chars are coded in ASCII]"
 (define-midi-message channel-message (message)
   :slots ((channel :initarg :channel :reader message-channel))
   :filler (setf channel (logand *status* #x0f)))
+
+(defmethod initialize-instance :after ((message channel-message) &key &allow-other-keys)
+  (cond
+    ((slot-boundp message 'channel)
+     (setf (slot-value message 'status)
+           (+ (slot-value message 'status-min)
+              (slot-value message 'channel))))
+    ((and (not (slot-boundp message 'channel))
+          (slot-boundp message 'status))
+     (setf (slot-value message 'channel)
+           (logand #x0f (slot-value message 'status))))))
+
+(defmethod (setf message-channel) (new-channel (message channel-message))
+  (check-type new-channel (integer 0 15))
+  (setf (slot-value message 'status) (+ (slot-value message 'status-min)
+                                        new-channel)
+        (slot-value message 'channel) new-channel))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
@@ -642,7 +741,7 @@ works only if the chars are coded in ASCII]"
   :status-min #xb0 :status-max #xbf
   :data-min #x00 :data-max #x78
   :slots ((controller :initarg :controller :reader message-controller)
-          (value :initarg value :reader message-value))
+          (value :initarg :value :reader message-value))
   :filler (setf controller next-byte
                 value next-byte)
   :length 2
@@ -790,11 +889,10 @@ works only if the chars are coded in ASCII]"
 (define-midi-message system-exclusive-message (system-message)
   :status-min #xf0 :status-max #xf0
   :slots ((data))
-  :filler (loop with len = (read-variable-length-quantity)
-                  initially (setf data (make-array
-                                        len :element-type '(unsigned-byte 8)))
-                for i from 0 below len
-                do (setf (aref data i) next-byte))
+  :filler (loop :with len := (read-variable-length-quantity)
+                  :initially (setf data (make-octet-vector len))
+                :for i :from 0 :below len
+                :do (setf (aref data i) next-byte))
   :length (+ (length-of-variables-length-quantity (length data))
              (length data))
   :writer (progn (write-variable-length-quantity (length data))
@@ -803,15 +901,14 @@ works only if the chars are coded in ASCII]"
 (define-midi-message authorization-system-exclusive-message (system-message)
   :status-min #xf7 :status-max #xf7
   :slots ((data))
-  :filler (loop with len = (read-variable-length-quantity)
-                  initially (setf data (make-array
-                                        len :element-type '(unsigned-byte 8)))
-                for i from 0 below len
-                do (setf (aref data i) next-byte))
+  :filler (loop :with len := (read-variable-length-quantity)
+                  :initially (setf data (make-octet-vector len))
+                :for i :from 0 :below len
+                :do (setf (aref data i) next-byte))
   :length (+ (length-of-variables-length-quantity (length data))
              (length data))
   :writer (progn (write-variable-length-quantity (length data))
-                 (loop for elem across data do (write-bytes elem))))
+                 (loop :for elem :across data :do (write-bytes elem))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
@@ -940,14 +1037,35 @@ works only if the chars are coded in ASCII]"
 (define-midi-message proprietary-event (meta-message)
   :data-min #x7f :data-max #x7f
   :slots ((data :initarg :data :reader message-data))
-  :filler (setf data (loop with len = (read-variable-length-quantity)
-                           with vec = (make-array
-                                       len
-                                       :element-type '(unsigned-byte 8))
-                           for i from 0 below len
-                           do (setf (aref vec i) next-byte)
-                           finally (return vec)))
+  :filler (setf data (loop :with len := (read-variable-length-quantity)
+                           :with vec := (make-octet-vector len)
+                           :for i :from 0 :below len
+                           :do (setf (aref vec i) next-byte)
+                           :finally (return vec)))
   :writer (map nil (lambda (byte) (write-bytes byte))
-            data)) ; FIXME
+            data))                      ; FIXME
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+
+(defgeneric read-midi-message (source)
+  (:documentation "Reads a midi MESSAGE from the SOURCE.
+RETURN: the MESSAGE read.")
+  (:method (source)
+    (let ((*midi-input* source)
+          (*status*     nil))
+      (read-message))))
+
+
+(defgeneric write-midi-message (destination message)
+  (:documentation "Writes a midi MESSAGE to the DESTINATION.
+RETURN: the MESSAGE written.")
+  (:method (destination (message message))
+    (let ((*midi-output* destination))
+      (write-message message)
+      destination)))
+
 
 ;;;; THE END ;;;;
