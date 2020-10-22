@@ -233,7 +233,7 @@ works only if the chars are coded in ASCII]"
 
 
 
-(define-condition unknown-event ()
+(define-condition unknown-event (error)
   ((status :initarg :status :reader status)
    (data-byte :initform "" :initarg :data-byte :reader data-byte))
   (:documentation "condition when the event does not exist in the library"))
@@ -242,7 +242,7 @@ works only if the chars are coded in ASCII]"
   ()
   (:documentation "condition when we read a data byte when a status byte was expected"))
 
-(define-condition header ()
+(define-condition header (error)
   ((header-type :initarg :header :reader header-type))
   (:report (lambda (condition stream)
              (format stream "Invalid header type ~S" (header-type condition))))
