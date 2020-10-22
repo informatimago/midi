@@ -888,7 +888,7 @@ May be:
 
 (define-midi-message system-exclusive-message (system-message)
   :status-min #xf0 :status-max #xf0
-  :slots ((data))
+  :slots ((data :initarg :data :reader message-data))
   :filler (loop :with len := (read-variable-length-quantity)
                   :initially (setf data (make-octet-vector len))
                 :for i :from 0 :below len
@@ -900,7 +900,7 @@ May be:
 
 (define-midi-message authorization-system-exclusive-message (system-message)
   :status-min #xf7 :status-max #xf7
-  :slots ((data))
+  :slots ((data :initarg :data :reader message-data))
   :filler (loop :with len := (read-variable-length-quantity)
                   :initially (setf data (make-octet-vector len))
                 :for i :from 0 :below len
